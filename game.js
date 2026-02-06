@@ -1,93 +1,133 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-let gameState = 'MENU';
+let gameState = 'PLAYING';
 let balls = [];
+let projectiles = [];
 let path = [];
-let spawnTimer = 0;
+const SHOOTER_POS = { x: 400, y: 300 };
+let mousePos = { x: 0, y: 0 };
 
-// 1. Define the Path (A simple S-curve)
+// 1. Initialize Path
 function initPath() {
-    for (let i = 0; i < 800; i++) {
+    path = [];
+    for (let i = 0; i < 1000; i++) {
         path.push({
-            x: 100 + i * 0.8,
-            y: 300 + Math.sin(i * 0.02) * 150
+            x: 100 + i * 0.7,
+            y: 300 + Math.sin(i * 0.015) * 180
         });
     }
 }
 
-// 2. Ball Object
-class Ball {
-    constructor(color) {
-        this.color = color;
-        this.distance = 0; // Distance along the path
+// 2. The Projectile (The fired ball)
+class Projectile {
+    constructor(x, y, angle) {
+        this.x = x;
+        this.y = y;
+        this.speed = 8;
         this.radius = 15;
+        this.vx = Math.cos(angle) * this.speed;
+        this.vy = Math.sin(angle) * this.speed;
+        this.color = '#ffffff';
+        this.active = true;
     }
 
     update() {
-        this.distance += 1.5; // Movement speed
+        this.x += this.vx;
+        this.y += this.vy;
+        // Deactivate if off-screen
+        if (this.x < 0 || this.x > 800 || this.y < 0 || this.y > 600) this.active = false;
     }
 
     draw() {
-        const pos = path[Math.floor(this.distance)];
-        if (!pos) return;
-
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, this.radius, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fillStyle = this.color;
         ctx.fill();
         ctx.closePath();
     }
 }
 
-// 3. Game Logic
-function startGame() {
-    gameState = 'PLAYING';
-    document.getElementById('main-menu').classList.add('hidden');
-    balls = [];
-    initPath();
-    animate();
-}
-
-function toggleSettings() {
-    const menu = document.getElementById('settings-menu');
-    menu.classList.toggle('hidden');
-}
-
-function animate() {
-    if (gameState !== 'PLAYING') return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw the track (visual guide)
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 30;
-    ctx.beginPath();
-    path.forEach((p, i) => {
-        if (i === 0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
-    });
-    ctx.stroke();
-
-    // Spawn new balls
-    spawnTimer++;
-    if (spawnTimer > 30) {
-        balls.push(new Ball(['#e74c3c', '#f1c40f', '#3498db', '#9b59b6'][Math.floor(Math.random() * 4)]));
-        spawnTimer = 0;
+// 3. The Chain Ball
+class Ball {
+    constructor(color) {
+        this.color = color;
+        this.distance = 0; 
+        this.radius = 15;
     }
 
-    // Update and Draw balls
-    balls.forEach((ball, index) => {
-        ball.update();
-        ball.draw();
+    getPosition() {
+        return path[Math.floor(this.distance)] || { x: -100, y: -100 };
+    }
 
-        // Game over check (if ball reaches end of path)
-        if (ball.distance >= path.length - 1) {
-            alert("Game Over!");
-            gameState = 'MENU';
-            document.getElementById('main-menu').classList.remove('hidden');
-        }
+    draw() {
+        const pos = this.getPosition();
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.stroke();
+        ctx.closePath();
+    }
+}
+
+// --- INPUT HANDLING ---
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mousePos.x = e.clientX - rect.left;
+    mousePos.y = e.clientY - rect.top;
+});
+
+canvas.addEventListener('mousedown', () => {
+    if (gameState !== 'PLAYING') return;
+    const angle = Math.atan2(mousePos.y - SHOOTER_POS.y, mousePos.x - SHOOTER_POS.x);
+    projectiles.push(new Projectile(SHOOTER_POS.x, SHOOTER_POS.y, angle));
+});
+
+// --- CORE LOGIC ---
+
+function update() {
+    if (gameState !== 'PLAYING') return;
+
+    // A. Spawn Logic (The "Tight Chain" fix)
+    // We only spawn a ball if there's enough room (diameter = 30px)
+    if (balls.length === 0 || balls[balls.length - 1].distance > 35) {
+        balls.push(new Ball(['#e74c3c', '#f1c40f', '#3498db', '#2ecc71'][Math.floor(Math.random() * 4)]));
+    }
+
+    // B. Update Ball Chain
+    balls.forEach(ball => ball.distance += 1);
+
+    // C. Update Projectiles
+    projectiles.forEach(p => p.update());
+
+    // D. Collision Detection (Projectile vs Chain)
+    projectiles.forEach(p => {
+        balls.forEach((ball, bIdx) => {
+            const bPos = ball.getPosition();
+            const dist = Math.sqrt((p.x - bPos.x)**2 + (p.y - bPos.y)**2);
+            
+            if (dist < 30) { // Collision radius
+                balls.splice(bIdx, 1); // Destroy ball
+                p.active = false;      // Destroy projectile
+            }
+        });
     });
 
-    requestAnimationFrame(animate);
+    // Clean up inactive projectiles
+    projectiles = projectiles.filter(p => p.active);
 }
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Shooter (The Frog)
+    const angle = Math.atan2(mousePos.y - SHOOTER_POS.y, mousePos.x - SHOOTER_POS.x);
+    ctx.save();
+    ctx.translate(SHOOTER_POS.x, SHOOTER_POS.y);
+    ctx.rotate(angle);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(-20, -20, 40, 40); // Simple square shooter
+    ctx.fillStyle = '#fff';
+    ctx
