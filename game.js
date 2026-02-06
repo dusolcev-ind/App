@@ -138,4 +138,18 @@ function draw() {
     ctx.fillStyle = '#27ae60';
     ctx.fillRect(-20, -20, 40, 40); // Simple square shooter
     ctx.fillStyle = '#fff';
-    ctx
+    ctx.fillRect(10, -5, 15, 10);  // "Barrel"
+    ctx.restore();
+
+    balls.forEach(ball => ball.draw());
+    projectiles.forEach(p => p.draw());
+
+    requestAnimationFrame(() => {
+        update();
+        draw();
+    });
+}
+
+// Initialize and Start
+initPath();
+draw();
