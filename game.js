@@ -1,6 +1,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+
 let gameState = 'PLAYING';
 let balls = [];
 let projectiles = [];
@@ -8,6 +9,13 @@ let path = [];
 const SHOOTER_POS = { x: 400, y: 300 };
 let mousePos = { x: 0, y: 0 };
 
+function startGame() {
+    gameState = 'PLAYING';
+    document.getElementById('main-menu').classList.add('hidden');
+    balls = [];
+    initPath();
+    animate();
+}
 // 1. Initialize Path
 function initPath() {
     path = [];
